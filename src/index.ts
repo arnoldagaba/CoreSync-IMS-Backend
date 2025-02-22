@@ -1,12 +1,13 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
+import { env } from './config/env.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 
 dotenv.config();
 
 const app: Express = express();
 
-const PORT = process.env.PORT || 3000;
+const PORT = env.PORT;
 
 app.get('/', (req: Request, res: Response) => {
     res.send('Successful!');
