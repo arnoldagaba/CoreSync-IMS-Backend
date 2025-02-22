@@ -1,0 +1,223 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  description String?
+  users       UserRole[]
+}
+
+model User {
+  id             Int               @id @default(autoincrement())
+  firstName      String
+  lastName       String
+  email          String            @unique
+  password       String
+  departmentId   Int?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  roles          UserRole[]
+  activityLogs   UserActivityLog[]
+  department     Department?       @relation(fields: [departmentId], references: [id])
+  MaintenanceLog MaintenanceLog[]
+}
+
+model UserRole {
+  userId Int
+  roleId Int
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+}
+
+model Department {
+  id                 Int      @id @default(autoincrement())
+  name               String   @unique
+  description        String?
+  parentDepartmentId Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  parent                Department?            @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id])
+  children              Department[]           @relation("DepartmentHierarchy")
+  users                 User[]
+  productionOrders      ProductionOrder[]
+  financialTransactions FinancialTransaction[]
+  budgets               Budget[]
+  Equipment             Equipment[]
+}
+
+model ProductionOrder {
+  id                 Int       @id @default(autoincrement())
+  departmentId       Int
+  scheduledStartDate DateTime
+  scheduledEndDate   DateTime
+  actualStartDate    DateTime?
+  actualEndDate      DateTime?
+  status             String
+  quantity           Int
+  productId          Int?
+
+  department Department @relation(fields: [departmentId], references: [id])
+  product    Product?   @relation(fields: [productId], references: [id])
+}
+
+model Equipment {
+  id                   Int     @id @default(autoincrement())
+  name                 String
+  type                 String
+  description          String?
+  departmentId         Int
+  maintenanceFrequency Int?
+
+  department      Department       @relation(fields: [departmentId], references: [id])
+  maintenanceLogs MaintenanceLog[]
+}
+
+model MaintenanceLog {
+  id              Int      @id @default(autoincrement())
+  equipmentId     Int
+  maintenanceDate DateTime
+  description     String
+  performedBy     Int?
+  status          String
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+  performer User?     @relation(fields: [performedBy], references: [id])
+}
+
+model InventoryItem {
+  id           Int     @id @default(autoincrement())
+  name         String
+  description  String?
+  quantity     Int
+  reorderLevel Int
+  vendorId     Int?
+  location     String?
+
+  vendor                Vendor?                @relation(fields: [vendorId], references: [id])
+  procurementOrderItems ProcurementOrderItem[]
+}
+
+model Vendor {
+  id           Int     @id @default(autoincrement())
+  name         String
+  contactEmail String
+  contactPhone String?
+  address      String?
+
+  inventoryItems    InventoryItem[]
+  procurementOrders ProcurementOrder[]
+}
+
+model ProcurementOrder {
+  id          Int      @id @default(autoincrement())
+  vendorId    Int
+  orderDate   DateTime
+  status      String
+  totalAmount Int // Stored in cents
+
+  vendor Vendor                 @relation(fields: [vendorId], references: [id])
+  items  ProcurementOrderItem[]
+}
+
+model ProcurementOrderItem {
+  id                 Int @id @default(autoincrement())
+  procurementOrderId Int
+  inventoryItemId    Int
+  quantity           Int
+  unitPrice          Int // Stored in cents
+
+  procurementOrder ProcurementOrder @relation(fields: [procurementOrderId], references: [id])
+  inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id])
+}
+
+model FinancialTransaction {
+  id              Int      @id @default(autoincrement())
+  transactionDate DateTime
+  description     String
+  transactionType String
+  amount          Int // Stored in cents
+  departmentId    Int?
+
+  department Department? @relation(fields: [departmentId], references: [id])
+}
+
+model Budget {
+  id              Int @id @default(autoincrement())
+  departmentId    Int
+  year            Int
+  allocatedBudget Int // Stored in cents
+  spentBudget     Int // Stored in cents
+
+  department Department @relation(fields: [departmentId], references: [id])
+}
+
+model Customer {
+  id           Int     @id @default(autoincrement())
+  name         String
+  contactEmail String
+  contactPhone String?
+  address      String?
+
+  salesOrders SalesOrder[]
+}
+
+model SalesOrder {
+  id          Int      @id @default(autoincrement())
+  customerId  Int
+  orderDate   DateTime
+  status      String
+  totalAmount Int // Stored in cents
+
+  customer Customer         @relation(fields: [customerId], references: [id])
+  items    SalesOrderItem[]
+}
+
+model SalesOrderItem {
+  id           Int @id @default(autoincrement())
+  salesOrderId Int
+  productId    Int
+  quantity     Int
+  unitPrice    Int // Stored in cents
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
+  product    Product    @relation(fields: [productId], references: [id])
+}
+
+model Product {
+  id             Int     @id @default(autoincrement())
+  name           String
+  description    String?
+  productionCost Int // Stored in cents
+  salePrice      Int // Stored in cents
+  category       String?
+
+  productionOrders ProductionOrder[]
+  salesOrderItems  SalesOrderItem[]
+}
+
+model UserActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String
+  timestamp DateTime @default(now())
+  details   Json?
+
+  user User @relation(fields: [userId], references: [id])
+}
