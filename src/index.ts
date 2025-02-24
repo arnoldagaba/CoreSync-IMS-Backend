@@ -1,7 +1,7 @@
 import express, { Express } from 'express';
 import dotenv from 'dotenv';
 import { env } from './config/env.js';
-import { errorHandler, setupErrorHandling } from './middlewares/error.middleware.js';
+import { setupErrorHandling } from './middlewares/error.middleware.js';
 import authRoutes from './routes/auth.route.js';
 
 dotenv.config();
