@@ -1,35 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../lib/prisma.js';
+import { PrismaClient } from '@prisma/client';
 import {
     RegisterInput,
     LoginInput,
     ResetPasswordInput,
 } from '../types/auth.types.js';
 import { RequestWithUser } from '../types/RequestWithUser.js';
-import { env } from '../config/env.js';
-import rateLimit from 'express-rate-limit';
 
-const JWT_SECRET = env.JWT_SECRET;
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 
-// Add these helper functions at the top of the file after imports
-const isValidEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-};
+// In-memory store for tracking login attempts per email
+interface LoginAttempt {
+    count: number;
+    lastAttempt: number; // timestamp in milliseconds
+}
 
-const isValidPassword = (password: string): boolean => {
-    // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/;
-    return passwordRegex.test(password);
-};
+const loginAttempts = new Map<string, LoginAttempt>();
 
-export const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // 5 attempts
-    message: { message: 'Too many login attempts, please try again later' },
-});
+const MAX_ATTEMPTS = 5;
+const WINDOW_MINUTES = 15;
+const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
 
 export const register = async (
     req: Request,
@@ -40,26 +33,28 @@ export const register = async (
         const { firstName, lastName, email, password, departmentId } =
             req.body as RegisterInput;
 
-        if (!isValidEmail(email)) {
-            res.status(400).json({ message: 'Invalid email format' });
-            return
+        // Ensure a departmentId is provided
+        if (!departmentId) {
+            res.status(400).json({ message: 'Department ID is required' });
+            return;
         }
 
-        if (!isValidPassword(password)) {
-            res.status(400).json({
-                message:
-                    'Password must be at least 8 characters long and contain uppercase, lowercase, and numbers',
-            });
-            return
+        // Check if the provided department exists
+        const department = await prisma.department.findUnique({
+            where: { id: departmentId },
+        });
+        if (!department) {
+            res
+                .status(400)
+                .json({ message: 'The specified department does not exist' });
+            return;
         }
 
         // Check if a user already exists with the same email
-        const existingUser = await prisma.user.findUnique({
-            where: { email },
-        });
+        const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
             res.status(400).json({ message: 'User already exists' });
-            return
+            return;
         }
 
         // Hash the password before storing it
@@ -76,15 +71,14 @@ export const register = async (
             },
         });
 
-        // Optionally, assign a default role if needed
+        // Optionally, assign a default role if needed here
 
         res.status(201).json({
             message: 'User registered successfully',
             user: { id: user.id, email: user.email },
         });
     } catch (error) {
-        console.error('Authentication error:', error);
-        next(error instanceof Error ? error : new Error('Unknown error occurred'));
+        next(error);
     }
 };
 
@@ -95,6 +89,26 @@ export const login = async (
 ) => {
     try {
         const { email, password } = req.body as LoginInput;
+        const now = Date.now();
+
+        // Check the login attempts for this email
+        const attempt = loginAttempts.get(email);
+        if (attempt) {
+            // If maximum attempts exceeded within the time window, block the request
+            if (
+                attempt.count >= MAX_ATTEMPTS &&
+                now - attempt.lastAttempt < WINDOW_MS
+            ) {
+                res.status(429).json({
+                    message: 'Too many login attempts. Please try again later.',
+                });
+                return;
+            }
+            // If the time window has passed, reset the attempts for this email
+            if (now - attempt.lastAttempt >= WINDOW_MS) {
+                loginAttempts.delete(email);
+            }
+        }
 
         // Retrieve the user by email, including their roles
         const user = await prisma.user.findUnique({
@@ -102,16 +116,22 @@ export const login = async (
             include: { roles: { include: { role: true } } },
         });
         if (!user) {
+            // Update login attempts on failure
+            updateLoginAttempts(email, now);
             res.status(400).json({ message: 'Invalid email or password' });
-            return
+            return;
         }
 
         // Compare the provided password with the stored hash
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
+            updateLoginAttempts(email, now);
             res.status(400).json({ message: 'Invalid email or password' });
-            return
+            return;
         }
+
+        // Successful login: reset login attempts
+        loginAttempts.delete(email);
 
         // Build the payload for the JWT (including user roles)
         const payload = {
@@ -125,10 +145,18 @@ export const login = async (
 
         res.status(200).json({ message: 'Login successful', token });
     } catch (error) {
-        console.error('Authentication error:', error);
-        next(error instanceof Error ? error : new Error('Unknown error occurred'));
+        next(error);
     }
 };
+
+function updateLoginAttempts(email: string, now: number) {
+    const attempt = loginAttempts.get(email);
+    if (attempt) {
+        loginAttempts.set(email, { count: attempt.count + 1, lastAttempt: now });
+    } else {
+        loginAttempts.set(email, { count: 1, lastAttempt: now });
+    }
+}
 
 export const resetPassword = async (
     req: RequestWithUser,
@@ -136,29 +164,25 @@ export const resetPassword = async (
     next: NextFunction
 ) => {
     try {
-        // Ensure that the request is authenticated (the middleware attaches req.user)
         if (!req.user) {
             res.status(401).json({ message: 'Unauthorized' });
-            return
+            return;
         }
         const userId = req.user.id;
         const { oldPassword, newPassword } = req.body as ResetPasswordInput;
 
-        // Retrieve the user from the database
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
             res.status(400).json({ message: 'User not found' });
             return;
         }
 
-        // Verify that the provided old password matches the current one
         const isValid = await bcrypt.compare(oldPassword, user.password);
         if (!isValid) {
             res.status(400).json({ message: 'Old password is incorrect' });
-            return
+            return;
         }
 
-        // Hash the new password and update the user record
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await prisma.user.update({
             where: { id: userId },
@@ -167,7 +191,6 @@ export const resetPassword = async (
 
         res.status(200).json({ message: 'Password updated successfully' });
     } catch (error) {
-        console.error('Authentication error:', error);
-        next(error instanceof Error ? error : new Error('Unknown error occurred'));
+        next(error);
     }
 };
