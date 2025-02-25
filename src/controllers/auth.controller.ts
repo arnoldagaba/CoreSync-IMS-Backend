@@ -112,7 +112,7 @@ export const login = async (
 
         // Retrieve the user by email, including their roles
         const user = await prisma.user.findUnique({
-            where: { email },
+            where: { email: email},
             include: { roles: { include: { role: true } } },
         });
         if (!user) {
