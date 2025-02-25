@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "prisma": {
-    "seed": "ts-node --esm prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
     "build": "tsc",

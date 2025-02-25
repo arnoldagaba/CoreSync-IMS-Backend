@@ -130,7 +130,7 @@ model ProcurementOrder {
   vendorId    Int
   orderDate   DateTime
   status      String
-  totalAmount Int // Stored in cents
+  totalAmount BigInt
 
   vendor Vendor                 @relation(fields: [vendorId], references: [id])
   items  ProcurementOrderItem[]
@@ -141,7 +141,7 @@ model ProcurementOrderItem {
   procurementOrderId Int
   inventoryItemId    Int
   quantity           Int
-  unitPrice          Int // Stored in cents
+  unitPrice          Int
 
   procurementOrder ProcurementOrder @relation(fields: [procurementOrderId], references: [id])
   inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id])
@@ -152,18 +152,18 @@ model FinancialTransaction {
   transactionDate DateTime
   description     String
   transactionType String
-  amount          Int // Stored in cents
+  amount          BigInt
   departmentId    Int?
 
   department Department? @relation(fields: [departmentId], references: [id])
 }
 
 model Budget {
-  id              Int @id @default(autoincrement())
+  id              Int    @id @default(autoincrement())
   departmentId    Int
   year            Int
-  allocatedBudget Int // Stored in cents
-  spentBudget     Int // Stored in cents
+  allocatedBudget BigInt
+  spentBudget     BigInt
 
   department Department @relation(fields: [departmentId], references: [id])
 }
@@ -183,7 +183,7 @@ model SalesOrder {
   customerId  Int
   orderDate   DateTime
   status      String
-  totalAmount Int // Stored in cents
+  totalAmount BigInt
 
   customer Customer         @relation(fields: [customerId], references: [id])
   items    SalesOrderItem[]
@@ -194,7 +194,7 @@ model SalesOrderItem {
   salesOrderId Int
   productId    Int
   quantity     Int
-  unitPrice    Int // Stored in cents
+  unitPrice    Int
 
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
   product    Product    @relation(fields: [productId], references: [id])
