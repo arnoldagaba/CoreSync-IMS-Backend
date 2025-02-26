@@ -29,16 +29,18 @@ export const register = async (req: Request, res: Response) => {
 
         // Basic validation
         if (!firstName || !lastName || !email || !password) {
-            return res.status(400).json({
+            res.status(400).json({
                 message:
                     'Missing required fields: firstName, lastName, email, and password are required',
             });
+            return;
         }
 
         // Email format validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            return res.status(400).json({ message: 'Invalid email format' });
+            res.status(400).json({ message: 'Invalid email format' });
+            return;
         }
 
         // Password strength validation (at least 8 characters, containing letters and numbers)
@@ -47,10 +49,11 @@ export const register = async (req: Request, res: Response) => {
             !/[A-Za-z]/.test(password) ||
             !/[0-9]/.test(password)
         ) {
-            return res.status(400).json({
+            res.status(400).json({
                 message:
                     'Password must be at least 8 characters long and include both letters and numbers',
             });
+            return;
         }
 
         // Check if user already exists
@@ -59,36 +62,36 @@ export const register = async (req: Request, res: Response) => {
         });
 
         if (existingUser) {
-            return res
-                .status(409)
-                .json({ message: 'User with this email already exists' });
+            res.status(409).json({ message: 'User with this email already exists' });
+            return;
         }
 
         // Validate roles input
-        if (!roles || roles.length === 0) {
-            return res
-                .status(400)
-                .json({ message: 'At least one role must be selected' });
+        if (!roles) {
+            res.status(400).json({ message: 'At least one role must be selected' });
+            return;
         }
+
+        // Ensure roles is an array
+        const rolesArray = Array.isArray(roles) ? roles : [roles];
+
+        if (rolesArray.length === 0) {
+            res.status(400).json({ message: 'At least one role must be selected' });
+            return;
+        }
+
+        // Log for debugging
+        console.log('Roles received:', roles);
+        console.log('Roles processed as:', rolesArray);
 
         // Lookup roles by name
         const rolesFound = await prisma.role.findMany({
-            where: { name: { in: roles } },
+            where: { name: { in: rolesArray } },
         });
 
         if (rolesFound.length === 0) {
-            return res.status(400).json({ message: 'Invalid role(s) provided' });
-        }
-
-        // Check for role-specific requirements
-        const requiresDepartment = rolesFound.some((role) =>
-            ['Manager', 'Department Head', 'Team Lead'].includes(role.name)
-        );
-
-        if (requiresDepartment && !department) {
-            return res.status(400).json({
-                message: 'A department is required for the selected role(s)',
-            });
+            res.status(400).json({ message: 'Invalid role(s) provided' });
+            return;
         }
 
         // Variable to store department ID
@@ -102,7 +105,8 @@ export const register = async (req: Request, res: Response) => {
             });
 
             if (!dept) {
-                return res.status(400).json({ message: 'Department not found' });
+                res.status(400).json({ message: 'Department not found' });
+                return;
             }
 
             departmentId = dept.id;
@@ -190,9 +194,8 @@ export const login = async (req: Request, res: Response) => {
 
         // Basic validation
         if (!email || !password) {
-            return res
-                .status(400)
-                .json({ message: 'Email and password are required' });
+            res.status(400).json({ message: 'Email and password are required' });
+            return;
         }
 
         // Find the user
@@ -209,13 +212,15 @@ export const login = async (req: Request, res: Response) => {
         });
 
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            res.status(404).json({ message: 'User not found' });
+            return;
         }
 
         // Verify password
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+            res.status(401).json({ message: 'Invalid credentials' });
+            return;
         }
 
         // Format the response
@@ -256,7 +261,8 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
         const { email } = req.body;
 
         if (!email) {
-            return res.status(400).json({ message: 'Email is required' });
+            res.status(400).json({ message: 'Email is required' });
+            return;
         }
 
         // Find the user
@@ -266,10 +272,11 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
 
         if (!user) {
             // For security reasons, don't reveal if user exists
-            return res.status(200).json({
+            res.status(200).json({
                 message:
                     'If the email is registered, you will receive a password reset link',
             });
+            return
         }
 
         // Generate a random reset token
@@ -337,9 +344,10 @@ export const resetPassword = async (req: Request, res: Response) => {
         const { email, token, newPassword } = req.body;
 
         if (!email || !token || !newPassword) {
-            return res.status(400).json({
+            res.status(400).json({
                 message: 'Email, token, and new password are required',
             });
+            return
         }
 
         // Password strength validation
@@ -348,10 +356,11 @@ export const resetPassword = async (req: Request, res: Response) => {
             !/[A-Za-z]/.test(newPassword) ||
             !/[0-9]/.test(newPassword)
         ) {
-            return res.status(400).json({
+            res.status(400).json({
                 message:
                     'Password must be at least 8 characters long and include both letters and numbers',
             });
+            return
         }
 
         // Find the user
@@ -360,7 +369,8 @@ export const resetPassword = async (req: Request, res: Response) => {
         });
 
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            res.status(404).json({ message: 'User not found' });
+            return;
         }
 
         // Find the latest password reset request for this user
@@ -375,9 +385,10 @@ export const resetPassword = async (req: Request, res: Response) => {
         });
 
         if (!resetRequest) {
-            return res
+            res
                 .status(400)
                 .json({ message: 'Invalid or expired reset token' });
+            return
         }
 
         const resetDetails = JSON.parse(String(resetRequest.details));
@@ -386,13 +397,15 @@ export const resetPassword = async (req: Request, res: Response) => {
 
         // Check if the token has expired
         if (Date.now() > expiryDate.getTime()) {
-            return res.status(400).json({ message: 'Reset token has expired' });
+            res.status(400).json({ message: 'Reset token has expired' });
+            return;
         }
 
         // Verify the token
         const isValidToken = await bcrypt.compare(token, hashedToken);
         if (!isValidToken) {
-            return res.status(400).json({ message: 'Invalid reset token' });
+            res.status(400).json({ message: 'Invalid reset token' });
+            return;
         }
 
         // Hash the new password
@@ -444,13 +457,15 @@ export const changePassword = async (req: Request, res: Response) => {
         const userId = req.user?.id; // Assuming middleware sets req.user
 
         if (!userId) {
-            return res.status(401).json({ message: 'Not authenticated' });
+            res.status(401).json({ message: 'Not authenticated' });
+            return;
         }
 
         if (!currentPassword || !newPassword) {
-            return res.status(400).json({
+            res.status(400).json({
                 message: 'Current password and new password are required',
             });
+            return;
         }
 
         // Password strength validation
@@ -459,10 +474,11 @@ export const changePassword = async (req: Request, res: Response) => {
             !/[A-Za-z]/.test(newPassword) ||
             !/[0-9]/.test(newPassword)
         ) {
-            return res.status(400).json({
+            res.status(400).json({
                 message:
                     'New password must be at least 8 characters long and include both letters and numbers',
             });
+            return
         }
 
         // Find the user
@@ -471,7 +487,8 @@ export const changePassword = async (req: Request, res: Response) => {
         });
 
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            res.status(404).json({ message: 'User not found' });
+            return;
         }
 
         // Verify current password
@@ -480,7 +497,8 @@ export const changePassword = async (req: Request, res: Response) => {
             user.password
         );
         if (!isPasswordValid) {
-            return res.status(401).json({ message: 'Current password is incorrect' });
+            res.status(401).json({ message: 'Current password is incorrect' });
+            return;
         }
 
         // Hash the new password
