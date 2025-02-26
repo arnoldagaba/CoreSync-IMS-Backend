@@ -13,57 +13,62 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Role model
 model Role {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
-  description String?
-  users       UserRole[]
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  description    String?
+  isDefault      Boolean          @default(false) // For auto-assigning to new users
+  userRoles      UserRole[]
+  RolePermission RolePermission[]
 }
 
+// User model
 model User {
-  id             Int               @id @default(autoincrement())
-  firstName      String
-  lastName       String
-  email          String            @unique
-  password       String
-  departmentId   Int?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  roles          UserRole[]
-  activityLogs   UserActivityLog[]
-  department     Department?       @relation(fields: [departmentId], references: [id])
-  MaintenanceLog MaintenanceLog[]
+  id              Int               @id @default(autoincrement())
+  firstName       String
+  lastName        String
+  email           String            @unique
+  password        String
+  departmentId    Int?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  userRoles       UserRole[]
+  activityLogs    UserActivityLog[]
+  maintenanceLogs MaintenanceLog[] // logs of maintenance performed by this user
+  department      Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 }
 
+// Pivot table for many-to-many between User and Role
 model UserRole {
   userId Int
   roleId Int
-
-  user User @relation(fields: [userId], references: [id])
-  role Role @relation(fields: [roleId], references: [id])
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
 }
 
+// Department model with hierarchical self relation
 model Department {
-  id                 Int      @id @default(autoincrement())
-  name               String   @unique
-  description        String?
-  parentDepartmentId Int?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
+  id                    Int                    @id @default(autoincrement())
+  name                  String                 @unique
+  description           String?
+  parentDepartmentId    Int?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
   parent                Department?            @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id])
   children              Department[]           @relation("DepartmentHierarchy")
   users                 User[]
   productionOrders      ProductionOrder[]
   financialTransactions FinancialTransaction[]
   budgets               Budget[]
-  Equipment             Equipment[]
+  equipments            Equipment[]
 }
 
+// Production Order model
 model ProductionOrder {
-  id                 Int       @id @default(autoincrement())
+  id                 Int        @id @default(autoincrement())
   departmentId       Int
   scheduledStartDate DateTime
   scheduledEndDate   DateTime
@@ -72,152 +77,169 @@ model ProductionOrder {
   status             String
   quantity           Int
   productId          Int?
-
-  department Department @relation(fields: [departmentId], references: [id])
-  product    Product?   @relation(fields: [productId], references: [id])
+  department         Department @relation(fields: [departmentId], references: [id])
+  product            Product?   @relation(fields: [productId], references: [id])
 }
 
+// Equipment model
 model Equipment {
-  id                   Int     @id @default(autoincrement())
+  id                   Int              @id @default(autoincrement())
   name                 String
   type                 String
   description          String?
   departmentId         Int
   maintenanceFrequency Int?
-
-  department      Department       @relation(fields: [departmentId], references: [id])
-  maintenanceLogs MaintenanceLog[]
+  department           Department       @relation(fields: [departmentId], references: [id])
+  maintenanceLogs      MaintenanceLog[]
 }
 
+// Maintenance Log model
 model MaintenanceLog {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   equipmentId     Int
   maintenanceDate DateTime
   description     String
   performedBy     Int?
   status          String
-
-  equipment Equipment @relation(fields: [equipmentId], references: [id])
-  performer User?     @relation(fields: [performedBy], references: [id])
+  equipment       Equipment @relation(fields: [equipmentId], references: [id])
+  performer       User?     @relation(fields: [performedBy], references: [id])
 }
 
+// Inventory Item model
 model InventoryItem {
-  id           Int     @id @default(autoincrement())
-  name         String
-  description  String?
-  quantity     Int
-  reorderLevel Int
-  vendorId     Int?
-  location     String?
-
+  id                    Int                    @id @default(autoincrement())
+  name                  String
+  description           String?
+  quantity              Int
+  reorderLevel          Int
+  vendorId              Int?
+  location              String?
   vendor                Vendor?                @relation(fields: [vendorId], references: [id])
   procurementOrderItems ProcurementOrderItem[]
 }
 
+// Vendor model
 model Vendor {
-  id           Int     @id @default(autoincrement())
-  name         String
-  contactEmail String
-  contactPhone String?
-  address      String?
-
+  id                Int                @id @default(autoincrement())
+  name              String
+  contactEmail      String
+  contactPhone      String?
+  address           String?
   inventoryItems    InventoryItem[]
   procurementOrders ProcurementOrder[]
 }
 
+// Procurement Order model
 model ProcurementOrder {
-  id          Int      @id @default(autoincrement())
+  id          Int                    @id @default(autoincrement())
   vendorId    Int
   orderDate   DateTime
   status      String
   totalAmount BigInt
-
-  vendor Vendor                 @relation(fields: [vendorId], references: [id])
-  items  ProcurementOrderItem[]
+  vendor      Vendor                 @relation(fields: [vendorId], references: [id])
+  items       ProcurementOrderItem[]
 }
 
+// Procurement Order Item model
 model ProcurementOrderItem {
-  id                 Int @id @default(autoincrement())
+  id                 Int              @id @default(autoincrement())
   procurementOrderId Int
   inventoryItemId    Int
   quantity           Int
   unitPrice          Int
-
-  procurementOrder ProcurementOrder @relation(fields: [procurementOrderId], references: [id])
-  inventoryItem    InventoryItem    @relation(fields: [inventoryItemId], references: [id])
+  procurementOrder   ProcurementOrder @relation(fields: [procurementOrderId], references: [id])
+  inventoryItem      InventoryItem    @relation(fields: [inventoryItemId], references: [id])
 }
 
+// Financial Transaction model
 model FinancialTransaction {
-  id              Int      @id @default(autoincrement())
+  id              Int         @id @default(autoincrement())
   transactionDate DateTime
   description     String
   transactionType String
   amount          BigInt
   departmentId    Int?
-
-  department Department? @relation(fields: [departmentId], references: [id])
+  department      Department? @relation(fields: [departmentId], references: [id])
 }
 
+// Budget model
 model Budget {
-  id              Int    @id @default(autoincrement())
+  id              Int        @id @default(autoincrement())
   departmentId    Int
   year            Int
   allocatedBudget BigInt
   spentBudget     BigInt
-
-  department Department @relation(fields: [departmentId], references: [id])
+  department      Department @relation(fields: [departmentId], references: [id])
 }
 
+// Customer model
 model Customer {
-  id           Int     @id @default(autoincrement())
+  id           Int          @id @default(autoincrement())
   name         String
   contactEmail String
   contactPhone String?
   address      String?
-
-  salesOrders SalesOrder[]
+  salesOrders  SalesOrder[]
 }
 
+// Sales Order model
 model SalesOrder {
-  id          Int      @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   customerId  Int
   orderDate   DateTime
   status      String
   totalAmount BigInt
-
-  customer Customer         @relation(fields: [customerId], references: [id])
-  items    SalesOrderItem[]
+  customer    Customer         @relation(fields: [customerId], references: [id])
+  items       SalesOrderItem[]
 }
 
+// Sales Order Item model
 model SalesOrderItem {
-  id           Int @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   salesOrderId Int
   productId    Int
   quantity     Int
   unitPrice    Int
-
-  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
-  product    Product    @relation(fields: [productId], references: [id])
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id])
+  product      Product    @relation(fields: [productId], references: [id])
 }
 
+// Product model
 model Product {
-  id             Int     @id @default(autoincrement())
-  name           String
-  description    String?
-  productionCost Int // Stored in cents
-  salePrice      Int // Stored in cents
-  category       String?
-
+  id               Int               @id @default(autoincrement())
+  name             String
+  description      String?
+  productionCost   Int
+  salePrice        Int
+  category         String?
   productionOrders ProductionOrder[]
   salesOrderItems  SalesOrderItem[]
 }
 
+// User Activity Log model
 model UserActivityLog {
   id        Int      @id @default(autoincrement())
   userId    Int
   action    String
   timestamp DateTime @default(now())
   details   Json?
+  user      User     @relation(fields: [userId], references: [id])
+}
 
-  user User @relation(fields: [userId], references: [id])
+// Permission model
+model Permission {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  description     String?
+  rolePermissions RolePermission[]
+}
+
+// Role Permission model
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
 }
