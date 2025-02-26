@@ -31,6 +31,36 @@ const envSchema = z.object({
   JWT_SECRET: z
     .string()
     .min(32, 'JWT secret must be at least 32 characters long'),
+
+  // NODE_ENV validation: Ensures it's one of the allowed values
+  NODE_ENV: z
+    .enum(['development', 'production', 'test'])
+    .default('development'),
+
+  // Email configuration validation
+  EMAIL_FROM: z.string().email('Email from address must be valid'),
+
+  EMAIL_HOST: z.string().min(1, 'Email host is required'),
+
+  EMAIL_PORT: z.preprocess(
+    (val) => (val === '' ? undefined : Number(val)),
+    z.number().default(587)
+  ),
+
+  EMAIL_SECURE: z.preprocess(
+    (val) => val === 'true' || val === true,
+    z.boolean().default(false)
+  ),
+
+  EMAIL_USER: z.string().min(1, 'Email user is required'),
+
+  EMAIL_PASSWORD: z.string().min(1, 'Email password is required'),
+
+  // FRONTEND_URL validation: Ensures it's a valid URL
+  FRONTEND_URL: z
+    .string()
+    .url('Frontend URL must be a valid URL')
+    .default('http://localhost:5173'),
 });
 
 const validateEnv = (): EnvType => {
