@@ -276,7 +276,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
                 message:
                     'If the email is registered, you will receive a password reset link',
             });
-            return
+            return;
         }
 
         // Generate a random reset token
@@ -347,7 +347,7 @@ export const resetPassword = async (req: Request, res: Response) => {
             res.status(400).json({
                 message: 'Email, token, and new password are required',
             });
-            return
+            return;
         }
 
         // Password strength validation
@@ -360,7 +360,7 @@ export const resetPassword = async (req: Request, res: Response) => {
                 message:
                     'Password must be at least 8 characters long and include both letters and numbers',
             });
-            return
+            return;
         }
 
         // Find the user
@@ -385,10 +385,8 @@ export const resetPassword = async (req: Request, res: Response) => {
         });
 
         if (!resetRequest) {
-            res
-                .status(400)
-                .json({ message: 'Invalid or expired reset token' });
-            return
+            res.status(400).json({ message: 'Invalid or expired reset token' });
+            return;
         }
 
         const resetDetails = JSON.parse(String(resetRequest.details));
@@ -478,7 +476,7 @@ export const changePassword = async (req: Request, res: Response) => {
                 message:
                     'New password must be at least 8 characters long and include both letters and numbers',
             });
-            return
+            return;
         }
 
         // Find the user

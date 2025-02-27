@@ -28,8 +28,8 @@ app.use(
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/meta', metaRoutes);
+app.use('/api/users', userRoutes); // Perform user actions (CRUD)
+app.use('/api/meta', metaRoutes); // Obtain roles and departments
 
 // Global error handler
 app.use(errorHandler);
